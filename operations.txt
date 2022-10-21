@@ -1,0 +1,1062 @@
+>> Create Type
+
+	CREATE TYPE BarType AS OBJECT ( 
+	name CHAR(20), 
+	addr CHAR(20) ) 
+
+
+>> create table from declared type
+
+	CREATE TABLE bars OF BarType;
+
+
+>> inserting values in to table
+
+	As a multi-column table:
+		INSERT INTO bars VALUES ('Sally''s', 'RiverRd');
+
+	As a single column/object value:
+	
+		INSERT INTO Bars VALUES( 
+			BarType('Joe''s Bar', 'Maple St.') ); 
+		
+>>  retrive multi-column table
+
+	SELECT * FROM bars;
+	
+>> Select from bars as a single column table
+
+	SELECT VALUE(b) FROM bars b;
+
+>> Column Objects
+
+	CREATE TYPE BeerType AS OBJECT ( 
+		name CHAR(20), 
+		manf CHAR(20) ) 
+	/
+	CREATE TABLE menu
+		(bar bartype,
+		beer beertype,
+		price real);
+	
+>> Object table 
+
+	CREATE TYPE MenuType AS OBJECT ( 
+		bar BarType,
+		beer BeerType,
+		price real) 
+	/
+	CREATE TABLE Menu2 OF MenuType;
+
+>> Object References using REF
+
+	CREATE TYPE MenuType2 AS OBJECT (
+		bar REF BarType,
+		beer REF BeerType,
+		price FLOAT)
+
+>> Obtaining REFs
+
+	CREATE TABLE Sells OF MenuType2;
+	
+	INSERT INTO sells VALUES(
+		(SELECT REF(b) FROM bars b WHERE name='Jim''s'),
+		(SELECT REF(e) FROM beers e WHERE name='Swan'),
+		2.40);
+		
+>> Use aliases to retrieve objects
+
+	SELECT s.Beer.name 
+	FROM Sells s;(aliases is the s )
+
+>> Retrieving with REF Datatype
+
+	SELECT s.bar.name, s.beer.name, price 
+	FROM sells s;
+
+>> Dereferencing
+
+	SELECT s.beer.name 
+	FROM Sells s 
+	WHERE s.bar.name = 'Joe''s Bar';
+	
+>> Scoped REFs
+	
+	CREATE type dept_t as object (dno integer, dname varchar(12));
+	/
+	CREATE TABLE dept_table OF dept_t;
+	CREATE TABLE dept_loc (
+	dept REF dept_t references dept_table, (Only objects of dept_table can be values of dept column.)
+	loc VARCHAR(20));
+	
+>> Incomplete Types
+
+	CREATE TYPE department; 
+	/
+	CREATE TYPE employee AS 
+	OBJECT ( 
+	name VARCHAR2(30), 
+	dept REF department, 
+	supv REF employee );
+	/
+	CREATE TYPE department AS 
+	OBJECT ( name 
+	VARCHAR2(30), 
+	mgr REF employee);
+	/
+
+>> Constraints on Object Tables
+
+	CREATE TYPE person AS OBJECT (
+	pid NUMBER, 
+	name VARCHAR(25), 
+	address VARCHAR(50));
+	/
+	CREATE TABLE person_table OF person 
+	( pid PRIMARY KEY,
+	  name NOT NULL
+	);
+	
+VARRAYs
+
+>> create varray
+
+	CREATE TYPE price_arr AS VARRAY(10) OF 
+	NUMBER(12,2);
+	
+>> use varray type in another type declaration
+
+	Create type excharray as varray(5) of varchar(12)
+	/
+	Create type share_t as object(
+		cname varchar(12), 
+		cprice number(6,2),
+		exchanges excharray,
+		dividend number(4,2), 
+		earnings number(6,2))
+	/
+
+>> insert data to varray
+
+	CREATE TABLE shares OF share_t(
+		cname primary key);
+	INSERT INTO shares values(‘BHP’, 10.50, 
+		excharray( ‘Sydney’ ,’New York’), 1.50, 3.20);
+
+>> varray full example
+
+	CREATE TYPE price_arr AS 
+	VARRAY(10) OF NUMBER(12,2)
+	/
+	CREATE TABLE pricelist (
+		pno integer, 
+		prices price_arr);
+		INSERT INTO pricelist 
+		VALUES(1, price_arr(2.50,3.75,4.25));
+		
+>> Retrieving from a VARRAY
+
+	SELECT * FROM pricelist;
+	 
+	output:
+		PNO PRICES
+		--------------------------------
+		1 PRICE_ARR(2.5, 3.75, 4.25)
+	
+	SELECT pno, s.COLUMN_VALUE price
+	FROM pricelist p, TABLE(p.prices) s;
+	
+	output:
+	
+		PNO PRICE
+		--------------
+		1 2.5 
+		1 3.75
+		1 4.25
+	
+Nested Tables
+
+>> creating nested table
+
+	CREATE TYPE BeerType AS OBJECT (
+		name CHAR(20),
+		kind CHAR(10),
+		colour CHAR(10))
+	/
+	CREATE TYPE BeerTableType AS 
+	TABLE OF BeerType
+	/
+	CREATE TABLE Manfs (
+		name CHAR(30),
+		addr CHAR(50),
+		beers beerTableType)
+	NESTED TABLE beers STORE AS beer_table;
+
+	
+>> Storing Nested Tables
+
+	NESTED TABLE beers STORE AS beer_table;
+
+>> Querying a Nested Table
+
+	SELECT beers FROM Manfs
+	WHERE name = ’Anheuser-Busch’;
+
+
+>> Querying Within a Nested Table
+
+	SELECT b.name
+	FROM TABLE( SELECT beers
+				FROM Manfs
+				WHERE name = ’Anheuser-Busch’) b
+	WHERE b.kind = ’ale’;
+	
+Full Example to nested tables
+
+>> create a table
+
+	CREATE TYPE proj_t AS OBJECT (
+		projno NUMBER,
+		projname VARCHAR (15)); 
+	/	
+	CREATE TYPE proj_list AS TABLE OF proj_t;
+	/
+	CREATE TYPE employee_t AS OBJECT (
+		eno number, 
+		projects proj_list); 
+	/	
+	CREATE TABLE employees of employee_t (eno primary key);
+	/
+	NESTED TABLE projects STORE AS employees_proj_table;
+
+>> insert data 
+
+	INSERT INTO employees VALUES(1000, proj_list(
+		proj_t(101, 'Avionics'), 
+		proj_t(102, 'Cruise control')
+		));
+
+>> retrieve the projects of eno 1000
+
+	SELECT * 
+	FROM TABLE(SELECT t.projects FROM employees t 
+	WHERE t.eno = 1000);
+	
+	output:
+	
+	PROJNO PROJNAME
+	--------------------
+	101 Avionics
+	102 Cruise control
+
+Example finish
+
+>> Collection Unnesting
+
+	SELECT e.eno, p.* 
+	FROM employees e, TABLE (e.projects) p;
+		
+	output:
+	
+	ENO PROJNO PROJNAME
+	---- ---------- ---------------
+	1000 101 Avionics
+	1000 102 Cruise control
+	2000 100 Autopilot
+	
+>> DML on Collections
+
+	INSERT:
+	
+		INSERT INTO TABLE(SELECT e.projects 
+						  FROM employees e 
+						  WHERE e.eno = 1000) 
+		VALUES (103, 'Project Neptune');
+	
+	UPDATE:
+	
+		UPDATE TABLE(SELECT e.projects 
+				     FROM …) p 
+		SET p.projname = 'Project Pluto' 
+		WHERE p.projno = 103;
+
+	
+	DELETE:
+	
+		DELETE TABLE(SELECT e.projects 
+					 FROM …) p
+		WHERE p.projno = 103;
+		
+
+>> DML on Nested Tuples
+
+	To drop a particular nested table, set the nested 
+	table column in the parent row to NULL.
+		
+		UPDATE employees e
+		SET e.projects = NULL 
+		WHERE e.eno = 1000;
+	
+	To add back a nested table row:
+		
+		UPDATE employees e
+		SET e.projects = proj_list(proj_t(103, 'Project Pluto'))
+		WHERE e.eno=1000;
+		
+	There is a difference between null value and an empty construtor
+	TO add abck a nested table row we could have done it in two steps as follows:
+	
+		UPDATE employees e
+		SET e.projects = proj_list() // Creates a nested table w/o any rows
+		WHERE e.eno=1000;
+		
+		INSERT INTO TABLE
+		(SELECT e.projects FROM employees e WHERE e,eno = 
+		1000)
+		VALUES (proj_t(102, ‘Project Pluto’));
+	
+>> Multilevel Collection Types
+
+		CREATE TYPE sat_t AS OBJECT ( name 
+		VARCHAR2(20), orbit NUMBER);
+		/
+		CREATE TYPE sat_ntt AS TABLE OF sat_t
+		/
+		CREATE TYPE planet_t AS OBJECT ( name 
+		VARCHAR2(20), mass NUMBER, satellites 
+		sat_ntt)
+		/
+		CREATE TYPE planet_ntt AS TABLE OF planet_t;
+		/
+		CREATE TYPE star_t AS OBJECT ( name 
+		VARCHAR2(20), age NUMBER, planets planet_ntt) 
+		/
+		CREATE TABLE stars_tab of start_t ( name PRIMARY 
+		KEY) 
+		NESTED TABLE planets STORE AS planets_nttab
+		(NESTED TABLE satellites STORE AS satellites_nttab
+		); 
+		
+
+>> insert new star called sun to multilevel nested table created above
+
+		INSERT INTO stars VALUES('Sun',23,
+			nt_pl_t( planet_t( 'Neptune',10,
+				nt_sat_t(satellite_t('Proteus',67),
+						 satellite_t('Triton',82))),
+				planet_t('Jupiter',189,
+						nt_sat_t(satellite_t('Callisto',97),
+						satellite_t('Ganymede', 22)) ) ));
+	
+>> Inserting a planet called ‘Saturn’ to the star ‘Sun’…
+		
+		INSERT INTO TABLE( SELECT planets FROM 
+		stars WHERE name = 'Sun') 
+			VALUES ('Saturn', 56, 
+				nt_sat_t( 
+					satellite_t('Rhea', 83)
+				)
+			);	
+
+>> Inserting a satellite called ‘Miranda’ to planet Uranus’ of the star ‘Sun’…
+		
+		INSERT INTO TABLE( 
+		SELECT p.satellites 
+		FROM TABLE( SELECT s.planets 
+					FROM stars s
+					WHERE s.name = 'Sun') p
+		WHERE p.name = 'Uranus')
+		VALUES ('Miranda', 31);
+
+Memeber Method
+
+>> create a member method
+
+		CREATE TYPE MenuType AS OBJECT ( 
+			bar REF BarType, 
+			beer REF BeerType, 
+			price FLOAT, 
+			MEMBER FUNCTION priceInYen(rate IN FLOAT)
+			 RETURN FLOAT
+		)
+		/
+	
+>> create memeber method body
+
+		CREATE TYPE BODY MenuType AS
+		MEMBER FUNCTION 
+		priceInYen(rate FLOAT) 
+		RETURN FLOAT IS
+			BEGIN 
+				RETURN rate * SELF.price; 
+			END;
+		END;
+		/ 
+		CREATE TABLE Sells OF MenuType;
+
+>> Adding a new method to type
+
+		ALTER TYPE MenuType 
+			ADD MEMBER 
+			FUNCTION 
+			priceInUSD(rate FLOAT)
+			RETURN FLOAT 
+			CASCADE;
+		
+>> add new body to the new member function
+
+		CREATE OR REPLACE TYPE BODY 
+		MenuType AS
+			MEMBER FUNCTION 
+			priceInYen(rate FLOAT) 
+			RETURN FLOAT IS 
+				BEGIN 
+					RETURN rate * SELF.price; 
+				END priceInYen;
+			
+			MEMBER FUNCTION 
+			priceInUSD(rate FLOAT) 
+			RETURN FLOAT IS 
+				BEGIN 
+					RETURN rate * SELF.price; 
+				END priceInUSD; 
+		END;
+		/
+
+>> method use in quries
+
+		SELECT s.beer.name, s.priceInYen(106.0) //use parentheses, even method has no arguments
+		FROM Sells s 
+		WHERE s.bar.name = 'Joe''s Bar';
+
+
+Map Methods
+
+Called automatically whenever two objects 
+need to be compared (DISTINCT , GROUP BY , ORDER BY)
+
+>> create map member metod
+
+		CREATE TYPE Rectangle_type AS OBJECT 
+		( length NUMBER, 
+			width NUMBER, 
+			MAP MEMBER FUNCTION area RETURN NUMBER
+		); 
+		/
+		CREATE TYPE BODY Rectangle_type AS MAP MEMBER 
+		FUNCTION area RETURN NUMBER IS 
+			BEGIN 
+				RETURN length * width; 
+			END area; 
+		END;
+
+>> insert data into table and check the ascending order
+
+		CREATE TABLE rectangles OF Rectangle_type;
+		INSERT INTO rectangles VALUES (1,2);
+		INSERT INTO rectangles VALUES (2,1);
+		INSERT INTO rectangles VALUES (2,2);
+		SELECT DISTINCT VALUE(r) FROM rectangles r;
+			
+		output:
+	
+		VALUE(R)(LEN, WID)
+		--------------------
+		RECTANGLE_TYP(1, 2)
+		RECTANGLE_TYP(2, 2)
+	
+Order Methods  
+
+Called automatically whenever two objects 
+need to be compared. (>,<,<=,>=)
+
+
+>> create order method 
+
+		CREATE TYPE Customer_typ AS OBJECT 
+		( id NUMBER, 
+		  name VARCHAR2(20), 
+		  addr VARCHAR2(30), 
+		  ORDER MEMBER FUNCTION match (c 
+		  Customer_typ) RETURN INTEGER ); 
+		/
+
+>> create body of that method 
+
+		CREATE TYPE BODY Customer_typ AS 
+		ORDER MEMBER FUNCTION match (c Customer_typ) 
+		RETURN INTEGER IS
+		BEGIN 
+			IF id < c.id THEN RETURN -1; -- any num <0
+			ELSIF id > c.id THEN RETURN 1; -- any num >0
+			ELSE RETURN 0; 
+			END IF; 
+		END; 
+		END; 
+		/
+
+When sorting or merging a large number of 
+objects, use a map method. 
+
+	One call maps all the objects into scalars, then 
+	sorts the scalars. 
+
+	An order method is less efficient because it must 
+	be called repeatedly (it can compare only two 
+	objects at a time).
+
+
+
+Methods on Nested Tables
+
+>> create nested table with method
+
+		CREATE TYPE proj_t AS OBJECT (projno number,
+			Projname varchar(15));
+		/
+		CREATE TYPE proj_list AS TABLE OF proj_t;
+		/
+		CREATE TYPE emp_t AS OBJECT 
+		   ( eno number,
+				projects proj_list,
+			MEMBER FUNCTION projcnt RETURN INTEGER
+		);
+	
+>> declare body of the method
+
+		CREATE OR REPLACE TYPE BODY emp_t AS MEMBER 
+		 FUNCTION projcnt RETURN INTEGER IS 
+			pcount INTEGER;
+			BEGIN 
+				ELECT count(p.projno) INTO pcount 
+				FROM TABLE(self.projects) p;
+				RETURN pcount; 
+			END; 
+		 END;
+		/
+
+>> query nested table method
+
+		CREATE TABLE emptab OF emp_t
+		 ( Eno PRIMARY KEY)
+		   NESTED TABLE projects STORE AS emp_proj_tab;
+		/
+		SELECT e.eno, e.projcnt() projcount
+		FROM emptab e;
+
+
+Inheritance in Oracle
+
+>> FINAL and NOT FINAL
+
+		CREATE TYPE Person_type AS OBJECT
+		( pid NUMBER,
+		name VARCHAR2(30),
+		address VARCHAR2(100) ) NOT FINAL; //can create subtypes
+		
+		
+>> changing type
+
+		ALTER TYPE Person_type FINAL; //cannot create sub types
+		
+
+>> creating sub type
+
+		CREATE TYPE Student_type UNDER Person_type 
+		( deptid NUMBER,
+		major VARCHAR2(30)) NOT FINAL;
+		/
+		
+		//one super type can have multiple sub types
+		
+		CREATE TYPE Employee_type UNDER Person_type
+		( empid NUMBER, 
+		mgr VARCHAR2(30)
+		);
+		/
+
+
+>> can create sub type under student type
+
+		CREATE TYPE PartTimeStudent_type UNDER 
+		Student_type
+		(numhours NUMBER);
+
+
+>> create super type table
+
+		Create table person_tab of person_type
+		(pid primary key);
+
+>> insert a subtype objet to super type table 
+
+		Insert into person_tab values
+		 ( student_type(4, 'Edward Learn', 
+			'65 Marina Blvd, Ocean Surf, WA, 6725',
+			40, 'CS')
+		 );
+		
+
+>> select all instance from super type table 
+    
+	(need to use VALUE() keyword to select)
+
+		SELECT VALUE(p) FROM person_tab p;
+		
+
+>> select subtype object from the super type table 
+     
+	 return student_type objects and its sub type objects
+
+		SELECT VALUE(s) 
+		FROM person_tab s 
+		WHERE VALUE(s) IS OF (Student_type);
+		
+
+>> select subtype from person table but only selected sub type
+
+		SELECT VALUE(s) 
+		FROM person_tab s 
+		WHERE VALUE(s) IS OF (ONLY student_type); 
+	
+>> selecting attribute from subtype table 
+
+	(need to use TREATE() keyword to treat each person 
+	as a parttime student and access the sub type attribute)
+
+		SELECT Name, TREAT(VALUE(p) AS 
+		PartTimeStudent_type).numhours hours
+		FROM person_tab p 
+		WHERE VALUE(p) IS OF (ONLY PartTimeStudent_type);
+
+
+>> NOT INSTANTIABLE Types
+
+	we cannot make instances / object from the Address type 
+	instead we can use it's subtypes
+
+		CREATE TYPE Address_typ AS OBJECT(...) 
+		NOT INSTANTIABLE NOT FINAL;
+		
+		CREATE TYPE AusAddress_typ UNDER 
+		Address_typ(...); 
+		
+		CREATE TYPE IntlAddress_typ UNDER 
+		Address_typ(...);
+
+>> NOT INSTANTIABLE Methods
+
+	define a method as non-instantiable if every 
+    subtype is to override the method in a different way.	
+	
+	If a subtype does not implement every inherited 
+	non-instantiable method, the subtype must be 
+	declared not instantiable.
+		
+		CREATE TYPE T AS OBJECT (
+		x NUMBER, 
+		NOT INSTANTIABLE MEMBER FUNCTION func1()*
+		RETURN NUMBER ) NOT INSTANTIABLE NOT FINAL;
+
+
+>> FINAL and NOT FINAL Methods 
+
+	If a method is declared to be final, subtypes 
+	cannot override it by providing their own 
+	implementation. not FINAL in default must be decalred to be final
+		
+		
+		CREATE TYPE MyType AS OBJECT 
+		( ..., 
+		MEMBER PROCEDURE Print,
+		FINAL MEMBER FUNCTION foo(x NUMBER) …, ...
+		) NOT FINAL;
+		/
+		CREATE TYPE MySubType UNDER MyType 
+		( ..., 
+		OVERRIDING MEMBER PROCEDURE Print, 
+		...);
+		/
+		
+>> Overloading Methods
+
+		CREATE TYPE MyType AS OBJECT 
+		( ..., 
+		MEMBER FUNCTION fun(x NUMBER)…, 
+		...) NOT FINAL;
+		/
+		CREATE TYPE MySubType UNDER MyType 
+		( ..., 
+		MEMBER FUNCTION fun(x DATE) …, 
+		...);
+		/
+	
+
+XML
+
+>> create xml table
+
+		Untyped XML Column in Table:
+		
+		CREATE TABLE AdminDocs ( 
+			id int primary key, 
+			xDoc XML not null
+			)
+		
+		Typed XML Column in Table:
+			
+		CREATE TABLE AdminDocs ( 
+			id int primary key, 
+			xDoc XML (CONTENT myCollection)
+			) 
+
+>> Insert data into table
+
+		NSERT INTO AdminDocs VALUES (1, 
+			'<book >
+			<title>Writing Secure Code</title>
+			<author>
+			<first-name>Michael</first-name>
+			<last-name>Howard</last-name>
+			</author>
+			<author>
+			<first-name>David</first-name>
+			<last-name>LeBlanc</last-name>
+			</author>
+			<price>39.99</price>
+			</book>')
+
+>> Get data from XML
+
+		select * 
+		from AdminDocs
+		
+>> Using Query() Method
+		
+		SELECT id, xDoc.query('/catalog') 
+		FROM AdminDocs
+		
+		SELECT id, xDoc.query('/catalog/product') 
+		FROM AdminDocs
+		
+		DECLARE @x xml
+		SET @x = '<ROOT><a>111</a></ROOT>'
+		SELECT @x.query('/ROOT/a')
+		
+		SELECT id, xDoc.query('//product') 
+		FROM AdminDoc
+		
+		SELECT id, xDoc.query('//product/number[.gt 500')
+		FROM AdminDocs
+		WHERE id = 1
+		
+		SELECT id , xDoc.query('//product[@name = "food"]')
+		FROM AdminDocs
+		
+		SELECT id , xDoc.query('//product[number < 500]')
+		FROM AdminDocs
+		
+		SELECT id , xDoc.query('//product[4]')
+		FROM AdminDocs
+		
+		SELECT id , xDoc.query('//product[4][number ]')
+		FROM AdminDocs
+		
+		
+>> FLWOR expression
+
+		for $d in distinct-value((doc"ord.xml")//item/@dept)
+		let $item := doc("ord.xml")//item[@dept = $d]
+		order by $d
+		return <department name="{$d}" totalQuantity="{sum($items/@quantity)}"/>
+		
+		for $prod in (doc("cat.xml")//product)
+		return $prod/number
+		
+		for $prod in doc("cat.xml")//product
+		let $prodDept := $prod/@dept
+		where $prodDept = "ACC" or $prodDept = "WMN"
+		return $prod/name
+		
+		for $prod at $i doc("cat.xml")//
+			product[@dept = "ACC" or @dept = "WMN"]
+		return <eval> {$i}.{data($prod/name)}</eval>
+		
+		for $item in doc("ord.xml")//item
+		order by $item/@dept , $item/@num
+		return $item
+		
+		for $prod in (doc("cat.xml")/catalog/product)
+		return if($prod/@dept = 'ACC')
+			   then <acc>{data($prod/number)} </acc>
+			   else <other>{data($prod/number)}</other>
+		
+
+Methods on XML data type
+	
+>>value()
+
+		SELECT xDoc.value('data((/doc//section[@num = 3]/title)[1])', 'nvarchar(max)') 
+		FROM AdminDocs
+		
+>> exist()
+
+		SELECT xDoc.query('/doc[@id = 123]//section') 
+		FROM AdminDocs
+		WHERE xDoc.exist ('/doc[@id = 123]') = 1
+
+>> modify()
+
+		UPDATE AdminDocs SET xDoc.modify('
+		insert 
+		<section num="2"> 
+		<title>Background</title>
+		</section>
+		after (/doc//section[@num=1])[1]'
+		
+
+PL/SQL
+
+
+>> syntax  
+
+	DECLARE 
+	 Variable declaration //The Declaration section (optional)
+	BEGIN 
+	 Program Execution //The Execution section (mandatory
+	EXCEPTION 
+	 Exception handling //The Exception (or Error) Handling section (optional)
+	END;
+
+>> comments 
+
+	DECLARE
+		 /* Multi-line comments are not required
+		 to actually use multiple lines.
+		 */
+		 BEGIN -- This is a single line comment
+		 NULL;
+	END;
+	
+>> set serveroutput on - run to on the pl/sql command execution
+
+ex :- 
+		DECLARE
+		BEGIN 
+			DBMS_OUTPUT.PUT_LINE('This is my first PL/SQL Program');
+		END;
+	
+>> creating variables
+
+	The General Syntax to declare a variable is:
+		variable_name datatype [NOT NULL := value ];
+		
+	ex:- 
+		DECLARE
+			salary number(4);
+			var_emp_id number(6) := 1116;
+			dept varchar2(10) NOT NULL := “HR Dept”;
+	
+>> using variable
+
+	DECLARE 
+		var_cname varchar(12); 
+		var_clno char(3) := 'c01';
+		BEGIN
+		 SELECT c.name INTO var_cname 
+		 FROM client c
+		 WHERE c.clno = var_clno; 
+		 
+		 DBMS_OUTPUT.PUT_LINE('Name of the client with clno : '|| var_clno || ' is ' || var_cname ); 
+	END
+	
+>> local and global variables
+
+		 DECLARE
+		  var_num1 number; //global variable
+		  var_num2 number; 
+		  BEGIN 
+			 var_num1 := 100; 
+			 var_num2 := 200; 
+				 DECLARE 
+					var_mult number; //local variable 
+				 BEGIN 
+					var_mult := var_num1 * var_num2; 
+				 END; 
+		 END; 
+		 /
+
+>> constants declaration
+		
+		DECLARE 
+			salary_increase CONSTANT number (3) := 10;
+	
+>>  Declaring a record
+
+		DECLARE 
+			TYPE employee_type IS RECORD 
+			(employee_id number(5), 
+			employee_first_name varchar2(25), 
+			employee_last_name varchar2(25), 
+			employee_dept char(3));
+
+		empolyee_rec employee_type //declare a record for that type
+		
+	If all the fields of a record are based on the columns of a table, we can declare the record as follows:
+
+		DECLARE 
+			employee_rec employee%ROWTYPE;
+			
+			
+>> Accessing a record 
+
+		
+		DECLARE 
+		 client_rec client%ROWTYPE;
+		 var_clno client.clno%TYPE := 'c01';
+		BEGIN
+		 select * into client_rec 
+		 from client c
+		 WHERE c.clno = var_clno ;
+		 
+		 DBMS_OUTPUT.PUT_LINE('Client No : ' || client_rec.clno ); 
+		 DBMS_OUTPUT.PUT_LINE('Name : ' || client_rec.name ); 
+		 DBMS_OUTPUT.PUT_LINE('Address : ' || client_rec.address ); 
+		END; 
+		/
+
+>> IF ELSE using 
+
+
+		IF condition THEN 
+		statement 1; 
+		ELSE 
+		statement 2; 
+		END IF;
+		
+		IF condition 1 THEN 
+		 statement 1; 
+		 statement 2; 
+		ELSIF condition 2 THEN 
+		 statement 3; 
+		ELSE
+		 statement 4; 
+		END IF;
+		
+		IF condition 1 THEN 
+		statement 1; 
+		statement 2; 
+		ELSIF condtion2 THEN
+		statement 3; 
+		ELSE 
+		statement 4; 
+		END IF;
+
+		
+		IF condition1 THEN 
+		 IF condition2 THEN 
+			statement1; 
+		 END IF; 
+		ELSIF condition3 THEN 
+		 statement2; 
+		END IF;
+	
+	
+>> LOOPS
+
+	general syntax
+		LOOP 
+		 statements; 
+		 EXIT; {or EXIT WHEN condition;}
+		END LOOP;
+
+>> While loop
+
+		WHILE <condition> LOOP 
+			statements; 
+		END LOOP;
+		
+>> FOR loop
+
+		
+		for i in 1..1000 loop
+		 insert into a values(i,i*2);
+		end loop;
+		
+		for i in reverse 1..1000 loop
+		 insert into a values(i,i*2);
+		end loop;
+
+>> Cursors
+
+	get the return value from DML operations (INSERT, UPDATE, or DELETE)
+
+		%FOUND - true =  query return data not empty  | false = query return data empty
+		%NOTFOUND - true =  query return data empty  | false = query return data not  empty
+		%ROWCOUNT - return the affected row count from the query
+		%ISOPEN - returns TRUE if the cursor is open, else FALSE
+		
+	
+	ex : -
+			
+			DECLARE 
+			 var_rows number(5);
+			BEGIN
+			 UPDATE purchase p
+			 SET p.qty = p.qty + 100;
+			 IF SQL%NOTFOUND THEN
+				dbms_output.put_line('None of the quantities were updated');
+			 ELSIF SQL%FOUND THEN
+			 var_rows := SQL%ROWCOUNT;
+				dbms_output.put_line('Quantities for ' || var_rows || ' purchases were updated');
+			 END IF; 
+			END
+			
+>>  Implicit Cursor with For Loops
+
+		
+		DECLARE 
+		 CURSOR stock_cur IS 
+		 SELECT s.company, s.price
+		FROM stock s; 
+		 stock_rec stock_cur%rowtype; 
+		BEGIN 
+		 FOR stock_rec in stock_cur LOOP 
+		 dbms_output.put_line('Company : ' || stock_rec.company ||' - Current Price : ' ||stock_rec.price); 
+		 END LOOP; 
+		END;
+		/
+		
+>> Declare curser 
+
+		DECLARE
+		 CURSOR emp_cur IS 
+		 SELECT * 
+		 FROM emp_tab
+		 WHERE salary > 5000;
+
+>> open curser 
+
+		OPEN curser_name
+		
+>> expilict curser with simple loop 
+
+		DECLARE 
+		 CURSOR stock_cur IS 
+		 SELECT s.company, s.price
+		FROM stock s; 
+		 stock_rec stock_cur%rowtype; 
+		BEGIN 
+		 IF NOT stock_cur%ISOPEN THEN 
+		OPEN stock_cur;
+		 END IF;
+		 LOOP 
+		 FETCH stock_cur INTO stock_rec;
+		 EXIT WHEN stock_cur%NOTFOUND; 
+		 dbms_output.put_line('Company : ' || stock_rec.company 
+		 ||' - Current Price : ' ||stock_rec.price); 
+		 END LOOP; 
+		END;
+		/
+		
+>>
